@@ -1,2 +1,2 @@
 # Carbohydrates
-Code used for processing NSC data we created
+Code used for processing sugar absorbance readings into sugar %(w/w) of samples
