@@ -1,0 +1,154 @@
+
+pacman::p_load(lubridate, readr, dplyr, tidyr, ggplot2, stringr)
+options(digits = 3)
+nsc <- read_csv("C:/Users/boog263/OneDrive - PNNL/Documents/Control Run 1 batch sheet.csv")
+nsc
+
+
+
+
+# Select one sample replicate per sample
+# h2o20 - h2o self for each replicate
+# take avg of the replicates
+# ghk75 - ghk self for each replicate
+# take avg of the replicates
+# ghk avg - h2o avg = raw absorbance
+
+raw_df <- nsc %>%
+  group_by(Sample) %>%
+  summarize(
+    coord = first(Coord),
+    A_abs = mean(A_GHK_75 - A_GHK_self) - mean(A_H2O_20 - A_H2O_self),
+    B_abs = mean(B_GHK_75 - B_GHK_self) - mean(A_H2O_20 - A_H2O_self),
+    C_abs = mean(C_GHK_75 - C_GHK_self) - mean(C_H2O_20 - C_H2O_self),
+    D_abs = mean(D_GHK_75 - D_GHK_self) - mean(D_H2O_20 - D_H2O_self),
+    across(Mass:V10_ml, mean)
+  ) %>%
+  ungroup()
+
+# subtract Glu0 and BLANK from raw absorbances
+
+net_df <-  raw_df %>%
+  mutate(
+    A_abs = ifelse(str_detect(Sample, "^(Glu|Fru|Suc)"), A_abs - A_abs[Sample %in% c("Glu0")], A_abs),
+    B_abs = ifelse(str_detect(Sample, "^(Glu|Fru|Suc)"), B_abs - B_abs[Sample %in% c("Glu0")], B_abs),
+    C_abs = ifelse(str_detect(Sample, "^(Glu|Fru|Suc)"), C_abs - C_abs[Sample %in% c("Glu0 [C]")], C_abs),
+    D_abs = ifelse(str_detect(Sample, "^(Glu|Fru|Suc)"), D_abs - D_abs[Sample %in% c("Glu0")], D_abs) 
+    ) %>%
+  mutate(
+    A_abs = ifelse(!str_detect(Sample, "^(Glu|Fru|Suc)"), A_abs - A_abs[Sample %in% c("BLANK")], A_abs),
+    B_abs = ifelse(!str_detect(Sample, "^(Glu|Fru|Suc)"), B_abs - B_abs[Sample %in% c("BLANK")], B_abs),
+    C_abs = ifelse(!str_detect(Sample, "^(Glu|Fru|Suc)"), C_abs - C_abs[Sample %in% c("BLANK")], C_abs),
+    D_abs = ifelse(!str_detect(Sample, "^(Glu|Fru|Suc)"), D_abs - D_abs[Sample %in% c("BLANK")], D_abs)
+      ) %>%
+    mutate(G_abs = case_when(
+      Sample == "Glu0" ~ 0,
+      Sample == "Glu0 [C]" ~ 0,
+      Sample == "Glu1000" ~ 1000,
+      Sample == "Glu1000 [C]" ~ 1000,
+      Sample == "Glu125" ~ 125,
+      Sample == "Glu125 [C]" ~ 125,
+      Sample == "Glu250" ~ 250,
+      Sample == "Glu250 [C]" ~ 250,
+      Sample == "Glu250 [D]" ~ 250,
+      Sample == "Glu500" ~ 500,
+      Sample == "Glu500 [C]" ~ 500,
+      Sample == "Glu500 [D]" ~ 500,
+      Sample == "Glu62.5" ~ 62.5,
+      Sample == "Glu62.5 [C]" ~ 62.5,
+      TRUE ~ NA_real_
+    ))
+  
+#calculate glucose curve 
+#[glucose] = m × Abs(glucose) + b 
+#1000 = m x 1.92 + b
+#m should = ~500
+glu_rows <- net_df %>%
+  filter(str_detect(Sample, "Glu"))
+
+glucose <- ggplot(glu_rows, aes(y = G_abs)) +
+  geom_point(aes(x = A_abs), color = "red") +
+  geom_smooth(aes(x = A_abs), method = "lm", se = FALSE, color = "red") +
+  geom_point(aes(x = B_abs), color = "blue") +
+  geom_smooth(aes(x = B_abs), method = "lm", se = FALSE, color = "blue") +
+  geom_point(aes(x = C_abs), color = "green") +
+  geom_smooth(aes(x = C_abs), method = "lm", se = FALSE, color = "green") +
+  geom_point(aes(x = D_abs), color = "purple") +
+  geom_smooth(aes(x = D_abs), method = "lm", se = FALSE, color = "purple") +
+  labs(x = "Value", y = "Glucose") 
+
+glucose
+
+
+# Fit linear models separately
+model_A <- lm(G_abs ~ A_abs, data = glu_rows)
+model_B <- lm(G_abs ~ B_abs, data = glu_rows)
+model_C <- lm(G_abs ~ C_abs, data = glu_rows)
+model_D <- lm(G_abs ~ D_abs, data = glu_rows)
+
+# Extract slope and intercept for each model
+slope_A <- coef(model_A)["A_abs"]
+intercept_A <- coef(model_A)["(Intercept)"]
+
+slope_B <- coef(model_B)["B_abs"]
+intercept_B <- coef(model_B)["(Intercept)"]
+
+slope_C <- coef(model_C)["C_abs"]
+intercept_C <- coef(model_C)["(Intercept)"]
+
+slope_D <- coef(model_D)["D_abs"]
+intercept_D <- coef(model_D)["(Intercept)"]
+
+# Create a dataframe
+regression_df <- data.frame(
+  Line = c("A", "B", "C", "D"),
+  Slope = c(slope_A, slope_B, slope_C, slope_D),
+  Intercept = c(intercept_A, intercept_B, intercept_C, intercept_D)
+)
+
+# Print the dataframe
+print(regression_df)
+
+
+
+#calculate conentration and Recovery of Fructose and Sucrose
+
+sugar <- net_df %>% mutate(
+  # [sugar, glu] = {(Abs(sample) - Abs(blank)) × m + b} × V6 / V5
+  glu = ( A_abs * regression_df[1, 2] + regression_df[1, 3]) * V6_ml / V5_ml,
+  
+
+  # [sugar, fru] = [sugar, glu+fru] - [sugar, glu]
+  fru = ((B_abs * regression_df[2, 2] + regression_df[2, 3]) * V6_ml / V5_ml) - glu,
+  #glufru = ((B_abs * regression_df[2, 2] + regression_df[2, 3]) * V6_ml / V5_ml),
+  
+ 
+  # [sugar, suc] = ([sugar, total glucose] - [sugar, glu]) × 2
+  suc = (((C_abs * regression_df[3, 2] + regression_df[3, 3]) * V6_ml / V5_ml * (V7_ul + V8_ul) / V7_ul) - glu) * 2,
+  
+  # [glucose hydrolysate] = {(Abs(sample) - Abs(blank)) × m + b} × (V9 + V10) / V9
+  star = (D_abs * regression_df[4, 2] + regression_df[4, 3]) * (V9_ml + V10_ml) / V9_ml) %>%
+  mutate(across(where(is.numeric), ~ifelse(. < 0, 0, .)),
+  C_fru_reco = ifelse(Sample == "Fru1000invert [C]", (C_abs - A_abs) / 1000 * 100, NaN),
+  C_suc_reco = ifelse(Sample == "Suc1000invert [C]", (C_abs - C_abs[Sample == "Suc1000nor [C]"]) * 2 * (342.3 / 360.3) / 1000 * 100, NaN)
+) %>%
+  select(Sample, glu, fru ,suc, star, C_fru_reco, C_suc_reco) %>%
+  mutate(
+    C_fru_reco = replace(C_fru_reco, is.nan(C_fru_reco), ""),
+    C_suc_reco = replace(C_suc_reco, is.nan(C_suc_reco), "")
+  )
+
+
+# calculate dry weight 
+
+
+dry_weight <- left_join(sugar, net_df, by = "Sample") %>%
+  mutate(
+    Glucose = (glu * V1_ml) / (Mass * 1000) * 100,
+    Fructose = (fru * V1_ml) / (Mass * 1000) * 100,
+    Sucrose = (suc * V1_ml) * (342.3 / 360.3) / (Mass * 1000) * 100,
+    Starch = (star * Vstarch) / (Mass * 1000) * 0.9 * 100,
+    Total_sugar = (Glucose + Fructose + Sucrose) * (360.3 / 342.3)
+  ) %>%
+  filter(!str_detect(Sample, "^(Glu|Fru|Suc)")) %>%
+  select(Sample, Glucose, Fructose, Sucrose, Total_sugar, Starch)
