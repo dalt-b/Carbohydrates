@@ -1,7 +1,10 @@
 
 pacman::p_load(lubridate, readr, dplyr, tidyr, ggplot2, stringr)
 options(digits = 3)
-nsc <- read_csv("C:/Users/boog263/OneDrive - PNNL/Documents/Control Run 1 batch sheet.csv")
+
+setwd()
+
+nsc <- read_csv()
 nsc
 
 
@@ -128,6 +131,7 @@ sugar <- net_df %>% mutate(
   
   # [glucose hydrolysate] = {(Abs(sample) - Abs(blank)) × m + b} × (V9 + V10) / V9
   star = (D_abs * regression_df[4, 2] + regression_df[4, 3]) * (V9_ml + V10_ml) / V9_ml) %>%
+  
   mutate(across(where(is.numeric), ~ifelse(. < 0, 0, .)),
   C_fru_reco = ifelse(Sample == "Fru1000invert [C]", (C_abs - A_abs) / 1000 * 100, NaN),
   C_suc_reco = ifelse(Sample == "Suc1000invert [C]", (C_abs - C_abs[Sample == "Suc1000nor [C]"]) * 2 * (342.3 / 360.3) / 1000 * 100, NaN)
@@ -137,6 +141,9 @@ sugar <- net_df %>% mutate(
     C_fru_reco = replace(C_fru_reco, is.nan(C_fru_reco), ""),
     C_suc_reco = replace(C_suc_reco, is.nan(C_suc_reco), "")
   )
+
+  
+
 
 
 # calculate dry weight 
@@ -152,3 +159,5 @@ dry_weight <- left_join(sugar, net_df, by = "Sample") %>%
   ) %>%
   filter(!str_detect(Sample, "^(Glu|Fru|Suc)")) %>%
   select(Sample, Glucose, Fructose, Sucrose, Total_sugar, Starch)
+
+write_csv(dry_weight, "")
