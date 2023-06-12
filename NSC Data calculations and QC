@@ -8,8 +8,6 @@ nsc <- read_csv()
 nsc
 
 
-
-
 # Select one sample replicate per sample
 # h2o20 - h2o self for each replicate
 # take avg of the replicates
@@ -82,33 +80,41 @@ glucose <- ggplot(glu_rows, aes(y = G_abs)) +
 
 glucose
 
-
-# Fit linear models separately
+#Apply linear models/best-fit line
 model_A <- lm(G_abs ~ A_abs, data = glu_rows)
 model_B <- lm(G_abs ~ B_abs, data = glu_rows)
 model_C <- lm(G_abs ~ C_abs, data = glu_rows)
 model_D <- lm(G_abs ~ D_abs, data = glu_rows)
 
-# Extract slope and intercept for each model
-slope_A <- coef(model_A)["A_abs"]
-intercept_A <- coef(model_A)["(Intercept)"]
-
-slope_B <- coef(model_B)["B_abs"]
-intercept_B <- coef(model_B)["(Intercept)"]
-
-slope_C <- coef(model_C)["C_abs"]
-intercept_C <- coef(model_C)["(Intercept)"]
-
-slope_D <- coef(model_D)["D_abs"]
-intercept_D <- coef(model_D)["(Intercept)"]
-
-# Create a dataframe
-regression_df <- data.frame(
-  Line = c("A", "B", "C", "D"),
-  Slope = c(slope_A, slope_B, slope_C, slope_D),
-  Intercept = c(intercept_A, intercept_B, intercept_C, intercept_D)
-)
-
+# Extract slope and intercept for each model and print dataframe
+{
+  model_A <- lm(G_abs ~ A_abs, data = glu_rows)
+  model_B <- lm(G_abs ~ B_abs, data = glu_rows)
+  model_C <- lm(G_abs ~ C_abs, data = glu_rows)
+  model_D <- lm(G_abs ~ D_abs, data = glu_rows)
+  
+  slope_A <- coef(model_A)["A_abs"]
+  intercept_A <- coef(model_A)["(Intercept)"]
+  rA <-  summary(model_A)$r.squared
+  
+  slope_B <- coef(model_B)["B_abs"]
+  intercept_B <- coef(model_B)["(Intercept)"]
+  rB <- summary(model_B)$r.squared
+  
+  slope_C <- coef(model_C)["C_abs"]
+  intercept_C <- coef(model_C)["(Intercept)"]
+  rC <- summary(model_C)$r.squared
+  
+  slope_D <- coef(model_D)["D_abs"]
+  intercept_D <- coef(model_D)["(Intercept)"]
+  rD <- summary(model_D)$r.squared
+  
+  regression_df <- data.frame(
+    Line = c("A", "B", "C", "D"),
+    Slope = c(slope_A, slope_B, slope_C, slope_D),
+    Intercept = c(intercept_A, intercept_B, intercept_C, intercept_D), 
+    r2 = c(rA, rB, rC, rD)
+  )
 # Print the dataframe
 print(regression_df)
 
@@ -141,10 +147,6 @@ sugar <- net_df %>% mutate(
     C_fru_reco = replace(C_fru_reco, is.nan(C_fru_reco), ""),
     C_suc_reco = replace(C_suc_reco, is.nan(C_suc_reco), "")
   )
-
-  
-
-
 
 # calculate dry weight 
 
